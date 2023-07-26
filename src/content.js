@@ -2,12 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// Used a GPL licensed code base, probaly need to add this license too
+// https://github.com/erikdesjardins/no-emoji/blob/master/LICENSE
+
 const GOOGLE_MAPS = 'www.google.com/maps'
 
 let options = null
 let helper = null
 let PAGE_BLURRED = false
-let ELEMENTS_TO_BLUR = ['img', 'image', 'picture', 'video', 'iframe', 'canvas', '*[style*="url"]', ':host']
+// let ELEMENTS_TO_BLUR = ['img', 'image', 'picture', 'video', 'iframe', 'canvas', '*[style*="url"]', ':host']
+let ELEMENTS_TO_BLUR = ['video', 'iframe', 'canvas', ':host']
 let ICONS_TO_BLUR = ['svg', 'span[class*="icon-"]', ':before', ':after']
 let ATTR_TO_BLUR_ELEMENT = ['[data-element-found-by-dom-scanner="true"]']
 let ATTR_TO_BLUR_ICON = ['[data-icon-found-by-dom-scanner="true"]']
@@ -22,11 +26,11 @@ function addBlurCSS() {
 
     let style = document.createElement('style')
     style.id = 'blur-css'
-    style.innerHTML = ELEMENTS_TO_BLUR.length > 0 ? ELEMENTS_TO_BLUR.join(',') + ` { filter: blur(${elementVal}px) !important; }` : ''
-    style.innerHTML += ATTR_TO_BLUR_ELEMENT.length > 0 ? ATTR_TO_BLUR_ELEMENT.join(',') + ` { filter: blur(${elementVal}px) !important; }` : ''
-    style.innerHTML += ATTR_TO_BLUR_ICON.length > 0 ? ATTR_TO_BLUR_ICON.join(',') + ` { filter: blur(${iconVal}px) !important; }` : ''
-    style.innerHTML += ICONS_TO_BLUR.length > 0 ? ICONS_TO_BLUR.join(',') + `{ filter: blur(${iconVal}px) !important; }` : ''
-    style.innerHTML += '.halal-web-pseudo:before, .halal-web-pseudo:after { filter: blur(0px) !important; }'
+    style.innerHTML = ELEMENTS_TO_BLUR.length > 0 ? ELEMENTS_TO_BLUR.join(',') + ` { display: none !important;}` : ''
+    style.innerHTML += ATTR_TO_BLUR_ELEMENT.length > 0 ? ATTR_TO_BLUR_ELEMENT.join(',') + ` { display: none !important; }` : ''
+    style.innerHTML += ATTR_TO_BLUR_ICON.length > 0 ? ATTR_TO_BLUR_ICON.join(',') + ` { display: none !important; }` : ''
+    style.innerHTML += ICONS_TO_BLUR.length > 0 ? ICONS_TO_BLUR.join(',') + `{ display: none !important; }` : ''
+    style.innerHTML += '.halal-web-pseudo:before, .halal-web-pseudo:after { display: none !important; }'
     let parentElement = document.documentElement
     parentElement.appendChild(style)
 }
@@ -44,8 +48,6 @@ const startDOMScanner = () => {
 
     window.DOMScannerInterval = setInterval(() => {
         triggerDOMScanner()
-        document.querySelectorAll('span:before').forEach((el) => {
-        })
     }, 500)
 }
 
@@ -71,7 +73,8 @@ function triggerDOMScanner() {
     els.forEach((el) => {
         let scannedElement = el
         // Get element background image property
-        let elementBGStyle = window.getComputedStyle(scannedElement).getPropertyValue('background-image')
+        // let elementBGStyle = window.getComputedStyle(scannedElement).getPropertyValue('background-image')
+        let elementBGStyle = 'none'
 
         // Find pseudo elements with content != none
         // and mark their parent element for later processing
@@ -288,6 +291,40 @@ async function updateOptions() {
 
 // Initialize web page
 async function init() {
+
+    // remove emoji 
+    const emoji = /\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?|\p{Emoji_Presentation}|\p{Emoji}\uFE0F/gu;
+	new MutationObserver(mutationRecords => {
+		const seenThisTick = new Set();
+
+		for (const record of mutationRecords) {
+			for (const node of record.addedNodes) {
+				// avoid running on trees where the parent was just walked (30% improvement)
+				seenThisTick.add(node);
+				if (seenThisTick.has(node.parentNode)) continue;
+
+				// avoid walking the tree (60% improvement)
+				if (!emoji.test(node.textContent)) continue;
+
+				const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+				while (walker.nextNode()) {
+					// avoid reads of .nodeValue (5% improvement)
+					const oldVal = walker.currentNode.nodeValue;
+					// not using .test first to avoid running regex twice (10% improvement)
+					// note: in testing `re.test(text)` and `text.replace(re, '') === text`
+					//       have approximately the same performance for negative results,
+					//       which is all that matters, because for positive results
+					//       we always have to run the replace anyways.
+					const newVal = oldVal.replace(emoji, '');
+					// avoid writes of .nodeValue (5% improvement)
+					if (newVal === oldVal) continue;
+
+					walker.currentNode.nodeValue = newVal;
+				}
+			}
+		}
+	}).observe(document, { childList: true, subtree: true });
+
     // remove options and see if it initializes properly and if it returns the initialization variable
     helper = new Helper()
 
